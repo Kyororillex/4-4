@@ -2,6 +2,16 @@ package com.example.a4_3;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Context;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.view.WindowManager;
+import android.widget.TextView;
+
+import java.util.List;
+
 import android.os.Bundle;
 
 import android.graphics.Color;
@@ -19,9 +29,15 @@ import com.github.mikephil.charting.formatter.IAxisValueFormatter;
 import com.github.mikephil.charting.utils.Transformer;
 import com.github.mikephil.charting.utils.ViewPortHandler;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     private LineChart mLineChart;
+    // センサーマネージャを定義
+    private SensorManager manager;
+    // 画面の各表示欄を制御するための変数(今回は 3 個、必要に応じて増やす)
+    private TextView sensor1, sensor2, sensor3;
+    // センサーから届いた値を格納する配列を定義
+    private float[] values = new float[3];
 
     // グラフに表示するデータに関する値を定義
     private int num; // グラフにプロットするデータの数
@@ -30,15 +46,45 @@ public class MainActivity extends AppCompatActivity {
     private int[] colors; // グラフにプロットする点の色を格納する配列
     private float max, min; // グラフのY軸の最大値と最小値
 
-    private float[] values; // データを格納する配列
-
     // 値をプロットするx座標
     private float count = 0;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+// 情報を取得するセンサーの設定(今回は加速度センサを取得)
+        List<Sensor> sensors = manager.getSensorList(Sensor.TYPE_MAGNETIC_FIELD);
+        Sensor sensor = sensors.get(0);
+// センサーからの情報の取得を開始
+        manager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI);
+    }
+
+    // アプリケーション一時停止時に呼ばれるコールバック関数 @Override
+    protected void onPause() {
+        super.onPause();
+// センサのリスナー登録解除
+        manager.unregisterListener(this);
+    }
+
+    // センサーイベント受信時に呼ばれるコールバック関数
+    public void onSensorChanged(SensorEvent event) {
+        // 取得した情報が加速度センサーからのものか確認
+        if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+// 受け取った情報を格納用の配列にコピー
+            values = event.values.clone();
+        }
+    }
+
+    // センサーの精度の変更時に呼ばれるコールバック関数(今回は何もしない)
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        manager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 
         // アプリ実行中はスリープしない
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -49,16 +95,16 @@ public class MainActivity extends AppCompatActivity {
         labels = new String[num];
         colors = new int[num];
 
-        labels[0] = "加速度 X軸";
-        labels[1] = "加速度 Y軸";
-        labels[2] = "加速度 Z軸";
+        labels[0] = "地磁気強度 X軸 (μT)";
+        labels[1] = "地磁気強度 Y軸 (μT)";
+        labels[2] = "地磁気強度 Z軸 (μT)";
 
         colors[0] = Color.rgb(0xFF, 0x00, 0x00); // 赤
         colors[1] = Color.rgb(0x00, 0xFF, 0x00); // 緑
         colors[2] = Color.rgb(0x00, 0x00, 0xFF); // 青
 
-        max = 50;
-        min = -50;
+        max = 1200;
+        min = -1200;
 
         // グラフViewを初期化する
         initChart();
@@ -79,7 +125,9 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    /** グラフViewの初期化 **/
+    /**
+     * グラフViewの初期化
+     **/
 
     private void initChart() {
         // 線グラフView
@@ -132,7 +180,7 @@ public class MainActivity extends AppCompatActivity {
         xAxis.setValueFormatter(new IAxisValueFormatter() {
             @Override
             public String getFormattedValue(float value, AxisBase axis) {
-                if(value >= 10) {
+                if (value >= 10) {
                     // データ20個ごとに目盛りに文字を表示
                     if (((int) value % 20) == 0) {
                         return Float.toString(value);
@@ -147,17 +195,17 @@ public class MainActivity extends AppCompatActivity {
     private void updateGraph() {
         // 線の情報を取得
         LineData lineData = mLineChart.getData();
-        if(lineData == null) {
+        if (lineData == null) {
             return;
         }
 
         LineDataSet[] lineDataSet = new LineDataSet[num];
 
-        for(int i = 0; i<num; i++){
+        for (int i = 0; i < num; i++) {
             // i番目の線を取得
             lineDataSet[i] = (LineDataSet) lineData.getDataSetByIndex(i);
             // i番目の線が初期化されていない場合は初期化する
-            if( lineDataSet[i] == null) {
+            if (lineDataSet[i] == null) {
                 // LineDataSetオブジェクト生成
                 lineDataSet[i] = new LineDataSet(null, labels[i]);
                 // 線の色設定
@@ -187,7 +235,8 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * 表示しているY座標の中心値を返す<br>
-     *     基準のY座標は左
+     * 基準のY座標は左
+     *
      * @param lineChart 対象のLineChart
      * @return 表示しているY座標の中心値
      */
